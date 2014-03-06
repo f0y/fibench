@@ -3,9 +3,11 @@ package fibonacci;
 import fibonacci.bench.BarrierTimer;
 import fibonacci.bench.FibonacciProducer;
 import fibonacci.bench.FibonacciTest;
-import fibonacci.mdl.BlockingFibonacciGenerator;
+import fibonacci.mdl.ExplicitLocking;
 import fibonacci.mdl.FibonacciGenerator;
-import fibonacci.mdl.LockFreeFibonacciGenerator;
+import fibonacci.mdl.IntrinsicLocking;
+import fibonacci.mdl.LockFree;
+import fibonacci.mdl.STM;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,13 +25,15 @@ public class FibonacciMain {
 
     private static List<Class<? extends FibonacciGenerator>> generatorsUnderTest =
             new ArrayList<Class<? extends FibonacciGenerator>>() {{
-                add(BlockingFibonacciGenerator.class);
-                add(LockFreeFibonacciGenerator.class);
+                add(IntrinsicLocking.class);
+                add(ExplicitLocking.class);
+                add(STM.class);
+                add(LockFree.class);
             }};
 
 
     public static void main(String arguments[]) {
-        int totalInvocations = 1_000_000;
+        int totalInvocations = 100000;
         System.out.println("Use <executable> <total_invocations>");
         System.out.println("Default value is " + totalInvocations);
 
@@ -39,23 +43,39 @@ public class FibonacciMain {
             totalInvocations = Integer.valueOf(arguments[0]);
         }
         int maxThreads = Runtime.getRuntime().availableProcessors() * 2;
-        System.out.println("Computing fibonacci numbers up to " + totalInvocations + " invocations ");
+        ArrayList<Integer> threadsAmount = new ArrayList<>();
+        for (int nThread = 1; nThread < maxThreads + 1; nThread *= 2)  {
+            threadsAmount.add(nThread);
+        }
+        makeTableHeader(threadsAmount);
         for (Class<? extends FibonacciGenerator> aClass : generatorsUnderTest) {
             try {
                 FibonacciGenerator fibonacciGenerator = aClass.newInstance();
-                testWith(fibonacciGenerator, totalInvocations, maxThreads);
+                testWith(fibonacciGenerator, totalInvocations, threadsAmount);
             } catch (Exception e) {
-                throw new RuntimeException();
+                throw new RuntimeException(e);
             }
         }
     }
 
-    public static void testWith(final FibonacciGenerator generator, int totalInvocations, int maxThreads) {
-            System.out.println("\nTesting " + generator.getClass().getSimpleName());
-            System.out.println("thread(s) / throughput (ns/item): ");
-            for (int nThread = 1; nThread < maxThreads + 1; nThread *= 2) {
+    private static void makeTableHeader(ArrayList<Integer> threadsAmount) {
+        System.out.println("");
+        System.out.print(String.format("%-17s |", "Impl/Threads"));
+        for (Integer nThread : threadsAmount) {
+            System.out.print(String.format(" %-6s |", nThread));
+        }
+        System.out.println("");
+        System.out.print(String.format("%-17s |", "---"));
+        for (Integer _ : threadsAmount) {
+            System.out.print(String.format(" %-6s |", "---"));
+        }
+    }
+
+    public static void testWith(final FibonacciGenerator generator, int totalInvocations, ArrayList<Integer> threadsAmount) {
+            System.out.println("");
+            System.out.print(String.format("%-17s |", generator.getClass().getSimpleName()));
+            for (Integer nThread : threadsAmount) {
                 generator.clear();
-                System.out.print(String.format("%2s/", nThread));
                 int trialsPerThread = totalInvocations / nThread;
                 ExecutorService producerPool = Executors.newFixedThreadPool(nThread);
                 BarrierTimer barrierTimer = new BarrierTimer();
@@ -64,7 +84,7 @@ public class FibonacciMain {
                 FibonacciTest fibonacciTest = new FibonacciTest(
                         barrierTimer, nThread, trialsPerThread, producerPool, cyclicBarrier, fibonacciProducer);
                 fibonacciTest.test();
-                System.out.print(String.format("%-6s | ", fibonacciTest.getThroughput()));
+                System.out.print(String.format(" %-6s |", fibonacciTest.getThroughput()));
                 producerPool.shutdown();
             }
 

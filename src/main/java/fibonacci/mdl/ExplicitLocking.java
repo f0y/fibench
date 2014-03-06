@@ -9,7 +9,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Date: 2/4/14
  * Time: 2:47 PM
  */
-public class BlockingFibonacciGenerator implements FibonacciGenerator {
+public class ExplicitLocking implements FibonacciGenerator {
 
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -19,17 +19,15 @@ public class BlockingFibonacciGenerator implements FibonacciGenerator {
     @Override
     public BigInteger next() {
         BigInteger result;
-        BigInteger newNext;
         lock.lock();
         try {
             result = curr;
-            newNext = curr.add(next);
             curr = next;
-            next = newNext;
+            next = result.add(next);
+            return result;
         } finally {
             lock.unlock();
         }
-        return result;
     }
 
     @Override

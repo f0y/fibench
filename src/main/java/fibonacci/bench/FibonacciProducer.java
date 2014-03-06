@@ -30,6 +30,7 @@ public class FibonacciProducer implements Runnable {
             for (int i = 0; i < trialsPerThread; i++) {
                 BigInteger next = generator.next();
 
+                // Prevent dead code elimination
                 if (next.hashCode() == System.nanoTime()) {
                     System.out.print("");
                 }

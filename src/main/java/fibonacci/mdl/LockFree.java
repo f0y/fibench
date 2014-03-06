@@ -9,9 +9,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * Date: 2/4/14
  * Time: 2:47 PM
  */
-public class LockFreeFibonacciGenerator implements FibonacciGenerator {
+public class LockFree implements FibonacciGenerator {
 
-    private final FibonacciSeqElem START_VALUE = new FibonacciSeqElem(BigInteger.ONE, BigInteger.ONE);
+    private final FibonacciSeqElem START_VALUE = new FibonacciSeqElem(
+            BigInteger.ONE, BigInteger.ONE);
 
     private static class FibonacciSeqElem {
         private final BigInteger next;
@@ -22,13 +23,9 @@ public class LockFreeFibonacciGenerator implements FibonacciGenerator {
             this.curr = curr;
         }
 
-        public BigInteger getNext() {
-            return next;
-        }
+        public BigInteger getNext() {return next;}
 
-        public BigInteger getCurr() {
-            return curr;
-        }
+        public BigInteger getCurr() {return curr;}
     }
 
     private final AtomicReference<FibonacciSeqElem> seqElemAtomic = new AtomicReference<>(START_VALUE);

@@ -1,13 +1,12 @@
 Played for fun with free-lock algorithms and benchmarking (inspired by Concurrency in Practice book)
+Also I've added STM(akka) version. It is slower comparing to LockFree implementation
+But still about 2,5 times faster than blocking implementation.
 
-Computing fibonacci numbers up to 1000000 invocations
+Computing fibonacci numbers up to 100.000 invocations
 
-Testing BlockingFibonacciGenerator
-thread(s) / throughput (ns/item):
-
- 1/39709  |  2/119873 |  4/136445 |  8/138872 | 16/146289
-
-Testing LockFreeFibonacciGenerator
-thread(s) / throughput (ns/item):
-
- 1/38612  |  2/33888  |  4/37284  |  8/64824  | 16/67993
+Impl/Threads      | 1      | 2      | 4      | 8      | 16     |
+---               | ---    | ---    | ---    | ---    | ---    |
+IntrinsicLocking  | 4959   | 3132   | 3458   | 3059   | 3402   |
+ExplicitLocking   | 4112   | 5348   | 6478   | 12895  | 13492  |
+STM               | 5193   | 5210   | 4899   | 5259   | 6733   |
+LockFree          | 4362   | 3601   | 3660   | 4732   | 4923   |
