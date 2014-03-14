@@ -1,7 +1,7 @@
 package fibonacci.bench;
 
-import fibonacci.mdl.ExplicitLocking;
-import fibonacci.mdl.IntrinsicLocking;
+import fibonacci.mdl.FineGrainedLock;
+import fibonacci.mdl.IntrinsicLock;
 import fibonacci.mdl.LockFree;
 import fibonacci.mdl.STM;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -40,7 +40,7 @@ import java.math.BigInteger;
      measuring sometimes undeterministic thread allocations.
      JMH does it for us, hence multiple forks.
 
-   * We don't want the profiles for different FibonacciGenerator
+   * We don't want the profiles for different fibonacci generators
      to mix up. JMH already takes care of that for us by forking
      each test.
  */
@@ -54,15 +54,15 @@ public class JmhBench {
 
     public static final int BATCH_SIZE = 10000;
 
-    private ExplicitLocking explicitLock;
-    private IntrinsicLocking intrinsicLock;
+    private FineGrainedLock fineGrainedLock;
+    private IntrinsicLock intrinsicLock;
     private LockFree lockFree;
     private STM stm;
 
     @Setup(Level.Iteration)
     public void setup() {
-        explicitLock = new ExplicitLocking();
-        intrinsicLock = new IntrinsicLocking();
+        fineGrainedLock = new FineGrainedLock();
+        intrinsicLock = new IntrinsicLock();
         lockFree = new LockFree();
         stm = new STM();
     }
@@ -74,7 +74,7 @@ public class JmhBench {
 
     @GenerateMicroBenchmark
     public BigInteger explicitLock() {
-        return explicitLock.next();
+        return fineGrainedLock.next();
     }
 
     @GenerateMicroBenchmark

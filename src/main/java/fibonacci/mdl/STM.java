@@ -4,6 +4,7 @@ import akka.stm.Atomic;
 import akka.stm.Ref;
 import akka.stm.TransactionFactory;
 import akka.stm.TransactionFactoryBuilder;
+import fibonacci.mdl.interfaces.StatefulGenerator;
 
 import java.math.BigInteger;
 import java.util.logging.Level;
@@ -15,7 +16,7 @@ import java.util.logging.Logger;
  * Date: 3/6/14
  * Time: 12:54 PM
  */
-public class STM implements FibonacciGenerator {
+public class STM implements StatefulGenerator<BigInteger> {
 
     private final Ref<BigInteger> curr = new Ref<>(BigInteger.ONE);
     private final Ref<BigInteger> next = new Ref<>(BigInteger.ONE);
@@ -45,13 +46,13 @@ public class STM implements FibonacciGenerator {
 
     @Override
     public void clear() {
-       new Atomic(txFactory) {
-           @Override
-           public Object atomically() {
-               next.set(BigInteger.ONE);
-               curr.set(BigInteger.ONE);
-               return null;
-           }
-       }.execute();
+        new Atomic(txFactory) {
+            @Override
+            public Object atomically() {
+                next.set(BigInteger.ONE);
+                curr.set(BigInteger.ONE);
+                return null;
+            }
+        }.execute();
     }
 }

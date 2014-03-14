@@ -1,5 +1,7 @@
 package fibonacci.mdl;
 
+import fibonacci.mdl.interfaces.StatefulGenerator;
+
 import java.math.BigInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -9,40 +11,34 @@ import java.util.concurrent.atomic.AtomicReference;
  * Date: 2/4/14
  * Time: 2:47 PM
  */
-public class LockFree implements FibonacciGenerator {
+public class LockFree implements StatefulGenerator<BigInteger> {
 
-    private final FibonacciSeqElem START_VALUE = new FibonacciSeqElem(
-            BigInteger.ONE, BigInteger.ONE);
+    private final Pair START_VALUE = new Pair(BigInteger.ONE, BigInteger.ONE);
 
-    private static class FibonacciSeqElem {
-        private final BigInteger next;
-        private final BigInteger curr;
+    private static class Pair {
+        final BigInteger next;
+        final BigInteger curr;
 
-        public FibonacciSeqElem(BigInteger curr, BigInteger next) {
+        public Pair(BigInteger curr, BigInteger next) {
             this.next = next;
             this.curr = curr;
         }
-
-        public BigInteger getNext() {return next;}
-
-        public BigInteger getCurr() {return curr;}
     }
 
-    private final AtomicReference<FibonacciSeqElem> seqElemAtomic = new AtomicReference<>(START_VALUE);
+    private final AtomicReference<Pair> atomic = new AtomicReference<>(START_VALUE);
 
     @Override
     public void clear() {
-        seqElemAtomic.set(START_VALUE);
+        atomic.set(START_VALUE);
     }
 
     public BigInteger next() {
         BigInteger nextValue = null;
         while (true) {
-            FibonacciSeqElem seqElem = seqElemAtomic.get();
-            nextValue = seqElem.getCurr();
-            FibonacciSeqElem newSeqElem = new FibonacciSeqElem(
-                    seqElem.getNext(), seqElem.getCurr().add(seqElem.getNext()));
-            if (seqElemAtomic.compareAndSet(seqElem, newSeqElem)) {
+            Pair pair = atomic.get();
+            nextValue = pair.curr;
+            Pair newPair = new Pair(pair.next, pair.curr.add(pair.next));
+            if (atomic.compareAndSet(pair, newPair)) {
                 break;
             }
         }

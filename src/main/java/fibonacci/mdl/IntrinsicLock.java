@@ -1,5 +1,7 @@
 package fibonacci.mdl;
 
+import fibonacci.mdl.interfaces.StatefulGenerator;
+
 import java.math.BigInteger;
 
 /**
@@ -8,7 +10,7 @@ import java.math.BigInteger;
  * Date: 3/6/14
  * Time: 2:21 PM
  */
-public class IntrinsicLocking implements FibonacciGenerator {
+public class IntrinsicLock implements StatefulGenerator<BigInteger> {
 
     private BigInteger curr = BigInteger.ONE;
     private BigInteger next = BigInteger.ONE;
