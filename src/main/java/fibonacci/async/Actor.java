@@ -5,119 +5,166 @@ import akka.actor.ActorSystem;
 import akka.actor.PoisonPill;
 import akka.actor.Props;
 import akka.actor.UntypedActor;
-import fibonacci.mdl.interfaces.StatefulGenerator;
+import akka.routing.RoundRobinRouter;
+import fibonacci.async.interfaces.FactorialSolver;
+import fibonacci.async.interfaces.Interval;
 
 import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
+import java.util.concurrent.Future;
 
-public class Actor implements
-        StatefulGenerator<CompletableFuture<BigInteger>>,
-        AutoCloseable {
+public class Actor implements FactorialSolver, AutoCloseable {
 
-    private final ActorRef producer;
-    private final ActorRef consumer;
+    private final ActorRef aggregator;
     private final ActorSystem system;
-    private final AtomicLong requestId = new AtomicLong(0);
 
-    final ConcurrentHashMap<Long, CompletableFuture<BigInteger>> results =
+    private final Map<String, CompletableFuture<BigInteger>> requests =
             new ConcurrentHashMap<>();
 
-    public Actor(final Consumer<BigInteger> callback) {
+    public Actor(int thresholdSize) {
         system = ActorSystem.create("ExampleSystem");
-        //noinspection Convert2MethodRef
-        consumer = system.actorOf(new Props(() -> new UntypedActor() {
-            @Override
-            public void onReceive(Object message) throws Exception {
-                if (message instanceof Producer.Value) {
-                    Producer.Value value = (Producer.Value) message;
-                    CompletableFuture<BigInteger> future = results.remove(value.id);
-                    future.complete(value.raw);
-                    callback.accept(value.raw);
-                } else {
-                    unhandled(message);
-                }
-            }
-        }), "consumer");
-        producer = system.actorOf(new Props(Producer.class), "producer");
+        aggregator = system.actorOf(
+                new Props(() -> new Aggregator(requests, thresholdSize)), "aggregator");
+
     }
 
-    @Override
-    public CompletableFuture<BigInteger> next() {
-        Long id = requestId.getAndIncrement();
-        CompletableFuture<BigInteger> result = new CompletableFuture<>();
-        results.put(id, result);
-        producer.tell(new Producer.GetNext(id), consumer);
-        return result;
-    }
-
-    @Override
-    public void clear() {
-        producer.tell(new Producer.Clear());
-    }
 
     @Override
     public void close() throws Exception {
-        producer.tell(PoisonPill.getInstance());
+        aggregator.tell(PoisonPill.getInstance());
         system.shutdown();
     }
 
-    public static class Producer extends UntypedActor {
+    @Override
+    public Future<BigInteger> factorial(int num) {
+        CompletableFuture<BigInteger> result = new CompletableFuture<>();
+        String id = UUID.randomUUID().toString();
+        requests.put(id, result);
+        aggregator.tell(new Aggregator.Solve(id, num));
+        return result;
 
-        private BigInteger curr;
-        private BigInteger next;
+    }
 
-        public static class GetNext {
-            final Long id;
+    public static class Aggregator extends UntypedActor {
 
-            public GetNext(Long id) {
+        private static final int NWORKERS = Runtime.getRuntime().availableProcessors();
+        private final ActorRef workerRouter;
+        private final Map<String, PartialResult> responses = new HashMap<>();
+        private final Map<String, CompletableFuture<BigInteger>> requests;
+        private final int thresholdSize;
+
+
+        public static class PartialResult {
+            public final BigInteger val;
+            public final int nMessages;
+            public final int maxMessages;
+
+            public PartialResult(BigInteger val, int nMessages, int maxMessages) {
+                this.val = val;
+                this.nMessages = nMessages;
+                this.maxMessages = maxMessages;
+            }
+
+            public PartialResult add(Worker.Result res) {
+                return new PartialResult(
+                        val.multiply(res.val), nMessages + 1, maxMessages);
+            }
+
+            public boolean isCompleted() {
+                return nMessages == maxMessages;
+            }
+
+        }
+
+        public static class Solve {
+
+            public final String id;
+            public final int num;
+
+            public Solve(String id, int num) {
                 this.id = id;
+                this.num = num;
             }
         }
 
-        public static class Clear {
-        }
-
-        public static class Value {
-            final Long id;
-            final BigInteger raw;
-
-            public Value(Long id, BigInteger raw) {
-                this.raw = raw;
-                this.id = id;
-            }
-        }
-
-        public Producer() {
-            clear();
+        public Aggregator(Map<String, CompletableFuture<BigInteger>> requests,
+                          int thresholdSize) {
+            this.thresholdSize = thresholdSize;
+            this.requests = requests;
+            workerRouter = this.getContext().actorOf(
+                    new Props(Worker.class).withRouter(new RoundRobinRouter(NWORKERS)),
+                    "router");
         }
 
         @Override
         public void onReceive(Object message) throws Exception {
-            if (message instanceof GetNext) {
-                GetNext next = (GetNext) message;
-                BigInteger result = evalNext();
-                Value value = new Value(next.id, result);
-                getSender().tell(value, getSelf());
-            } else if (message instanceof Clear) {
-                clear();
+            if (message instanceof Solve) {
+                Solve solve = (Solve) message;
+                LinkedList<Interval> intervals = new LinkedList<>();
+                Interval.buildIntervals(1, solve.num, intervals, thresholdSize);
+                responses.put(solve.id,
+                        new PartialResult(BigInteger.ONE, 0, intervals.size()));
+                for (Interval interval : intervals) {
+                    workerRouter.tell(new Worker.Compute(
+                            solve.id, interval.from, interval.to),
+                            getSelf());
+                }
+            } else if (message instanceof Worker.Result) {
+                Worker.Result result = (Worker.Result) message;
+                PartialResult partialResult = responses.get(result.id);
+                PartialResult newResult = partialResult.add(result);
+                if (newResult.isCompleted()) {
+                    responses.remove(result.id);
+                    requests.remove(result.id).complete(newResult.val);
+                } else {
+                    responses.put(result.id, newResult);
+                }
+            } else {
+                unhandled(message);
+            }
+        }
+    }
+
+    public static class Worker extends UntypedActor {
+
+        public static class Compute {
+            public final String id;
+            public final int from;
+            public final int to;
+
+            public Compute(String id, int from, int to) {
+                this.id = id;
+                this.from = from;
+                this.to = to;
+            }
+        }
+
+        public static class Result {
+            public final String id;
+            public final BigInteger val;
+
+            public Result(String id, BigInteger val) {
+                this.id = id;
+                this.val = val;
+            }
+        }
+
+        @Override
+        public void onReceive(Object message) throws Exception {
+            if (message instanceof Compute) {
+                Compute compute = (Compute) message;
+                BigInteger result = FactorialSolver.computeDirectly
+                        (compute.from, compute.to);
+                getSender().tell(new Result(compute.id, result), getSelf());
             } else {
                 unhandled(message);
             }
         }
 
-        private void clear() {
-            curr = BigInteger.ONE;
-            next = BigInteger.ONE;
-        }
-
-        private BigInteger evalNext() {
-            BigInteger result = curr;
-            curr = next;
-            next = result.add(next);
-            return result;
-        }
     }
 }

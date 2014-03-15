@@ -43,7 +43,7 @@ import java.math.BigInteger;
    * We don't want the profiles for different fibonacci generators
      to mix up. JMH already takes care of that for us by forking
      each test.
- */
+*/
 @BenchmarkMode(Mode.SingleShotTime)
 @Warmup(iterations = 100, batchSize = JmhBench.BATCH_SIZE)
 @Measurement(iterations = 100, batchSize = JmhBench.BATCH_SIZE)
