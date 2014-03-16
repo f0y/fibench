@@ -1,8 +1,5 @@
 package fibonacci.mdl;
 
-import fibonacci.mdl.interfaces.CurrentValueSupplier;
-import fibonacci.mdl.interfaces.Generator;
-
 import java.math.BigInteger;
 
 /**
@@ -11,12 +8,11 @@ import java.math.BigInteger;
  * Date: 3/14/14
  * Time: 6:35 PM
  */
-public class Immutable implements
-        Generator<Immutable>,
-        CurrentValueSupplier<BigInteger> {
+public class Immutable {
 
     private final BigInteger next;
-    private final BigInteger val;
+    // Текущее значение
+    public final BigInteger val;
 
     private Immutable(BigInteger next, BigInteger val) {
         this.next = next;
@@ -31,8 +27,4 @@ public class Immutable implements
         return new Immutable(BigInteger.ONE, BigInteger.ONE);
     }
 
-    @Override
-    public BigInteger val() {
-        return val;
-    }
 }

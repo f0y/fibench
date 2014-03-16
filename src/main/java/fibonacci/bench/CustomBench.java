@@ -4,7 +4,7 @@ import fibonacci.mdl.FineGrainedLock;
 import fibonacci.mdl.IntrinsicLock;
 import fibonacci.mdl.LockFree;
 import fibonacci.mdl.STM;
-import fibonacci.mdl.interfaces.StatefulGenerator;
+import fibonacci.mdl.interfaces.FibonacciGenerator;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -20,8 +20,8 @@ import java.util.concurrent.Executors;
  * Time: 7:31 PM
  */
 public class CustomBench {
-    private static List<Class<? extends StatefulGenerator<BigInteger>>> generatorsUnderTest =
-            new ArrayList<Class<? extends StatefulGenerator<BigInteger>>>() {{
+    private static List<Class<? extends FibonacciGenerator<BigInteger>>> generatorsUnderTest =
+            new ArrayList<Class<? extends FibonacciGenerator<BigInteger>>>() {{
                 add(IntrinsicLock.class);
                 add(FineGrainedLock.class);
                 add(STM.class);
@@ -44,11 +44,9 @@ public class CustomBench {
             threadsAmount.add(nThread);
         }
         makeTableHeader(threadsAmount);
-        for (Class<? extends StatefulGenerator<BigInteger>> aClass : generatorsUnderTest) {
+        for (Class<? extends FibonacciGenerator<BigInteger>> aClass : generatorsUnderTest) {
             try {
-                StatefulGenerator<BigInteger> fibonacciGenerator =
-                        aClass.newInstance();
-                testWith(fibonacciGenerator, totalInvocations, threadsAmount);
+                testWith(aClass, totalInvocations, threadsAmount);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -68,11 +66,14 @@ public class CustomBench {
         }
     }
 
-    public static void testWith(final StatefulGenerator<BigInteger> generator, int totalInvocations, ArrayList<Integer> threadsAmount) {
+    public static void testWith(
+            Class<? extends FibonacciGenerator<BigInteger>> generatorClass,
+            int totalInvocations,
+            ArrayList<Integer> threadsAmount) throws Exception {
         System.out.println("");
-        System.out.print(String.format("%-17s |", generator.getClass().getSimpleName()));
+        System.out.print(String.format("%-17s |", generatorClass.getSimpleName()));
         for (Integer nThread : threadsAmount) {
-            generator.clear();
+            FibonacciGenerator<BigInteger> generator = generatorClass.newInstance();
             int trialsPerThread = totalInvocations / nThread;
             ExecutorService producerPool = Executors.newFixedThreadPool(nThread);
             BarrierTimer barrierTimer = new BarrierTimer();

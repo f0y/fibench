@@ -1,6 +1,6 @@
 package fibonacci.bench;
 
-import fibonacci.mdl.interfaces.StatefulGenerator;
+import fibonacci.mdl.interfaces.FibonacciGenerator;
 
 import java.math.BigInteger;
 import java.util.concurrent.CyclicBarrier;
@@ -13,11 +13,11 @@ import java.util.concurrent.CyclicBarrier;
  */
 public class FibonacciProducer implements Runnable {
 
-    private final StatefulGenerator<BigInteger> generator;
+    private final FibonacciGenerator<BigInteger> generator;
     private final CyclicBarrier barrier;
     private final long trialsPerThread;
 
-    public FibonacciProducer(StatefulGenerator<BigInteger> generator, CyclicBarrier barrier, long trialsPerThread) {
+    public FibonacciProducer(FibonacciGenerator<BigInteger> generator, CyclicBarrier barrier, long trialsPerThread) {
         this.generator = generator;
         this.barrier = barrier;
         this.trialsPerThread = trialsPerThread;

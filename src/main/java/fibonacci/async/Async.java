@@ -19,6 +19,7 @@ public class Async implements FactorialSolver {
                 FactorialSolver.computeDirectly(from, to));
     }
 
+    @Override
     public Future<BigInteger> factorial(int num) {
         return computeAsync(1, num);
 

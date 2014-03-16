@@ -4,7 +4,7 @@ import akka.stm.Atomic;
 import akka.stm.Ref;
 import akka.stm.TransactionFactory;
 import akka.stm.TransactionFactoryBuilder;
-import fibonacci.mdl.interfaces.StatefulGenerator;
+import fibonacci.mdl.interfaces.FibonacciGenerator;
 
 import java.math.BigInteger;
 import java.util.logging.Level;
@@ -16,8 +16,10 @@ import java.util.logging.Logger;
  * Date: 3/6/14
  * Time: 12:54 PM
  */
-public class STM implements StatefulGenerator<BigInteger> {
+public class STM implements FibonacciGenerator<BigInteger> {
 
+    // Оборачиваем переменные в транзакционные ссылки
+    // система будет отслеживать изменения этих переменных внутри транзакции
     private final Ref<BigInteger> curr = new Ref<>(BigInteger.ONE);
     private final Ref<BigInteger> next = new Ref<>(BigInteger.ONE);
 
@@ -33,26 +35,31 @@ public class STM implements StatefulGenerator<BigInteger> {
 
     @Override
     public BigInteger next() {
+        // Создаем транзакцию
         return new Atomic<BigInteger>(txFactory) {
+            // Изменения внутри метода
+            // будут обладают АСI (https://en.wikipedia.org/wiki/ACID)
             @Override
             public BigInteger atomically() {
+                // Все значения отслеживаемых переменных согласованы
                 BigInteger result = curr.get();
+                // Изменения не видны другим потокам
                 curr.set(next.get());
                 next.set(result.add(next.get()));
+                // Проверяется были ли изменения над отслеживаемыми
+                // переменными. Если да, то нас опередили, но мы
+                // оптимистичны и повторяем транзакцию еще раз.
+                // Если мы первые, то атомарно записываем новые значения.
                 return result;
             }
+            // и выполняем ее
         }.execute();
     }
 
     @Override
-    public void clear() {
-        new Atomic(txFactory) {
-            @Override
-            public Object atomically() {
-                next.set(BigInteger.ONE);
-                curr.set(BigInteger.ONE);
-                return null;
-            }
-        }.execute();
+    public BigInteger val() {
+        // Транзакция создается неявно
+        return curr.get();
     }
+
 }

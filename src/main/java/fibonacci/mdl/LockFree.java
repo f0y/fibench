@@ -1,6 +1,6 @@
 package fibonacci.mdl;
 
-import fibonacci.mdl.interfaces.StatefulGenerator;
+import fibonacci.mdl.interfaces.FibonacciGenerator;
 
 import java.math.BigInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -11,37 +11,42 @@ import java.util.concurrent.atomic.AtomicReference;
  * Date: 2/4/14
  * Time: 2:47 PM
  */
-public class LockFree implements StatefulGenerator<BigInteger> {
+public class LockFree implements FibonacciGenerator<BigInteger> {
 
-    private final Pair START_VALUE = new Pair(BigInteger.ONE, BigInteger.ONE);
-
-    private static class Pair {
+    // Инкапсулируем состояние генератора в класс
+    private static class State {
         final BigInteger next;
         final BigInteger curr;
 
-        public Pair(BigInteger curr, BigInteger next) {
+        public State(BigInteger curr, BigInteger next) {
             this.next = next;
             this.curr = curr;
         }
     }
 
-    private final AtomicReference<Pair> atomic = new AtomicReference<>(START_VALUE);
-
-    @Override
-    public void clear() {
-        atomic.set(START_VALUE);
-    }
+    // Сделаем состояние класса атомарным
+    private final AtomicReference<State> atomicState = new AtomicReference<>(
+            new State(BigInteger.ONE, BigInteger.ONE));
 
     public BigInteger next() {
-        BigInteger nextValue = null;
+        BigInteger value = null;
         while (true) {
-            Pair pair = atomic.get();
-            nextValue = pair.curr;
-            Pair newPair = new Pair(pair.next, pair.curr.add(pair.next));
-            if (atomic.compareAndSet(pair, newPair)) {
-                break;
-            }
+            // сохраняем состояние класса
+            State state = atomicState.get();
+            // то что возвращаем если удалось изменить состояние класса
+            value = state.curr;
+            // конструируем новое состояние
+            State newState = new State(state.next, state.curr.add(state.next));
+            // если за время пока мы конструировали новое состояние
+            // оно осталось прежним, то заменяем состояние на новое
+            // иначе пробуем сконструировать еще раз
+            if (atomicState.compareAndSet(state, newState)) {break;}
         }
-        return nextValue;
+        return value;
+    }
+
+    @Override
+    public BigInteger val() {
+        return atomicState.get().curr;
     }
 }

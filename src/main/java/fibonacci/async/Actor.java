@@ -30,7 +30,6 @@ public class Actor implements FactorialSolver, AutoCloseable {
         system = ActorSystem.create("ExampleSystem");
         aggregator = system.actorOf(
                 new Props(() -> new Aggregator(requests, thresholdSize)), "aggregator");
-
     }
 
 

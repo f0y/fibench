@@ -1,10 +1,8 @@
 package fibonacci.mdl;
 
-import fibonacci.mdl.interfaces.CurrentValueSupplier;
-import fibonacci.mdl.interfaces.StatefulGenerator;
+import fibonacci.mdl.interfaces.FibonacciGenerator;
 
 import java.math.BigInteger;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -14,49 +12,36 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Date: 2/4/14
  * Time: 2:47 PM
  */
-public class FineGrainedLock implements
-        StatefulGenerator<BigInteger>,
-        CurrentValueSupplier<BigInteger> {
+public class FineGrainedLock implements FibonacciGenerator<BigInteger> {
 
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final Lock readLock = lock.readLock();
-    private final Lock writeLock = lock.writeLock();
-
     private BigInteger curr = BigInteger.ONE;
     private BigInteger next = BigInteger.ONE;
 
     @Override
     public BigInteger next() {
         BigInteger result;
-        writeLock.lock();
+        lock.writeLock().lock();
         try {
+            // Вход запрещен
             result = curr;
             curr = next;
             next = result.add(next);
             return result;
         } finally {
-            writeLock.unlock();
-        }
-    }
-
-    @Override
-    public void clear() {
-        writeLock.lock();
-        try {
-            curr = BigInteger.ONE;
-            next = BigInteger.ONE;
-        } finally {
-            writeLock.lock();
+            lock.writeLock().unlock();
         }
     }
 
     @Override
     public BigInteger val() {
-        readLock.lock();
+        lock.readLock().lock();
         try {
+            // При отпущенном write lock
+            // Допуст`им вход множества потоков на чтение
             return curr;
         } finally {
-            readLock.unlock();
+            lock.readLock().unlock();
         }
     }
 }

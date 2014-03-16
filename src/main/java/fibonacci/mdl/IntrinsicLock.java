@@ -1,6 +1,6 @@
 package fibonacci.mdl;
 
-import fibonacci.mdl.interfaces.StatefulGenerator;
+import fibonacci.mdl.interfaces.FibonacciGenerator;
 
 import java.math.BigInteger;
 
@@ -10,7 +10,7 @@ import java.math.BigInteger;
  * Date: 3/6/14
  * Time: 2:21 PM
  */
-public class IntrinsicLock implements StatefulGenerator<BigInteger> {
+public class IntrinsicLock implements FibonacciGenerator<BigInteger> {
 
     private BigInteger curr = BigInteger.ONE;
     private BigInteger next = BigInteger.ONE;
@@ -24,8 +24,8 @@ public class IntrinsicLock implements StatefulGenerator<BigInteger> {
     }
 
     @Override
-    public synchronized void clear() {
-        curr = BigInteger.ONE;
-        next = BigInteger.ONE;
+    public synchronized BigInteger val() {
+        return curr;
     }
+
 }
