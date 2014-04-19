@@ -15,7 +15,6 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 
 public class Actor implements FactorialSolver, AutoCloseable {
@@ -23,13 +22,10 @@ public class Actor implements FactorialSolver, AutoCloseable {
     private final ActorRef aggregator;
     private final ActorSystem system;
 
-    private final Map<String, CompletableFuture<BigInteger>> requests =
-            new ConcurrentHashMap<>();
-
     public Actor(int thresholdSize) {
         system = ActorSystem.create("ExampleSystem");
         aggregator = system.actorOf(
-                new Props(() -> new Aggregator(requests, thresholdSize)), "aggregator");
+                new Props(() -> new Aggregator(thresholdSize)), "aggregator");
     }
 
 
@@ -42,21 +38,55 @@ public class Actor implements FactorialSolver, AutoCloseable {
     @Override
     public Future<BigInteger> factorial(int num) {
         CompletableFuture<BigInteger> result = new CompletableFuture<>();
-        String id = UUID.randomUUID().toString();
-        requests.put(id, result);
-        aggregator.tell(new Aggregator.Solve(id, num));
+        ActorRef completor = system.actorOf(new Props(() ->
+                new Completor(result)));
+        aggregator.tell(new Aggregator.Solve(num), completor);
         return result;
 
+    }
+
+    public static class Completor extends UntypedActor {
+
+        public static class FinalResult {
+            public final BigInteger val;
+            public FinalResult(BigInteger val) {
+                this.val = val;
+            }
+        }
+
+        private final CompletableFuture<BigInteger> result;
+
+        public Completor(CompletableFuture<BigInteger> result) {
+            this.result = result;
+        }
+
+        @Override
+        public void onReceive(Object message) throws Exception {
+            if (message instanceof FinalResult) {
+                FinalResult finalResult = (FinalResult) message;
+                result.complete(finalResult.val);
+            } else {
+                unhandled(message);
+            }
+        }
     }
 
     public static class Aggregator extends UntypedActor {
 
         private static final int NWORKERS = Runtime.getRuntime().availableProcessors();
         private final ActorRef workerRouter;
-        private final Map<String, PartialResult> responses = new HashMap<>();
-        private final Map<String, CompletableFuture<BigInteger>> requests;
+        private final Map<String, Tuple> responses = new HashMap<>();
         private final int thresholdSize;
 
+        public static class Tuple {
+            public final ActorRef sender;
+            public final PartialResult partialResult;
+
+            public Tuple(ActorRef sender, PartialResult partialResult) {
+                this.sender = sender;
+                this.partialResult = partialResult;
+            }
+        }
 
         public static class PartialResult {
             public final BigInteger val;
@@ -81,47 +111,44 @@ public class Actor implements FactorialSolver, AutoCloseable {
         }
 
         public static class Solve {
-
-            public final String id;
             public final int num;
-
-            public Solve(String id, int num) {
-                this.id = id;
+            public Solve(int num) {
                 this.num = num;
             }
         }
 
-        public Aggregator(Map<String, CompletableFuture<BigInteger>> requests,
-                          int thresholdSize) {
+        public Aggregator(int thresholdSize) {
             this.thresholdSize = thresholdSize;
-            this.requests = requests;
             workerRouter = this.getContext().actorOf(
-                    new Props(Worker.class).withRouter(new RoundRobinRouter(NWORKERS)),
-                    "router");
+                    new Props(Worker.class).withRouter(
+                            new RoundRobinRouter(NWORKERS)), "router");
         }
 
         @Override
         public void onReceive(Object message) throws Exception {
             if (message instanceof Solve) {
                 Solve solve = (Solve) message;
+                final String id = UUID.randomUUID().toString();
                 LinkedList<Interval> intervals = new LinkedList<>();
                 Interval.buildIntervals(1, solve.num, intervals, thresholdSize);
-                responses.put(solve.id,
-                        new PartialResult(BigInteger.ONE, 0, intervals.size()));
+                responses.put(id, new Tuple(
+                        getSender(), new PartialResult(
+                                BigInteger.ONE, 0, intervals.size())));
                 for (Interval interval : intervals) {
                     workerRouter.tell(new Worker.Compute(
-                            solve.id, interval.from, interval.to),
+                            id, interval.from, interval.to),
                             getSelf());
                 }
             } else if (message instanceof Worker.Result) {
                 Worker.Result result = (Worker.Result) message;
-                PartialResult partialResult = responses.get(result.id);
-                PartialResult newResult = partialResult.add(result);
+                Tuple tuple = responses.get(result.id);
+                PartialResult newResult = tuple.partialResult.add(result);
                 if (newResult.isCompleted()) {
-                    responses.remove(result.id);
-                    requests.remove(result.id).complete(newResult.val);
+                    responses.remove(result.id).sender.tell(
+                            new Completor.FinalResult(newResult.val),
+                            getSelf());
                 } else {
-                    responses.put(result.id, newResult);
+                    responses.put(result.id, new Tuple(tuple.sender, newResult));
                 }
             } else {
                 unhandled(message);
