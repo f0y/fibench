@@ -1,9 +1,13 @@
 package fibonacci.async;
 
-import fibonacci.async.interfaces.FactorialSolver;
-
 import java.math.BigInteger;
-import java.util.concurrent.CompletableFuture;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
@@ -12,17 +16,38 @@ import java.util.concurrent.Future;
  * Date: 3/14/14
  * Time: 10:34 PM
  */
-public class Async implements FactorialSolver {
+public class Async {
 
-    static Future<BigInteger> computeAsync(int from, int to) {
-        return CompletableFuture.supplyAsync(() ->
-                FactorialSolver.computeDirectly(from, to));
+    Future<BigInteger> factorial(int num) {
+        return Executors.newSingleThreadExecutor().submit(
+                () -> Interval.to(num).multiply());
     }
 
-    @Override
-    public Future<BigInteger> factorial(int num) {
-        return computeAsync(1, num);
+    static void processSequentially(List<Integer> nums)
+            throws ExecutionException, InterruptedException {
+        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        List<Future<BigInteger>> results = new LinkedList<>();
+        for (Integer num : nums) {
+            results.add(executor.submit(() -> Interval.to(num).multiply()));
+        }
+        for (Future<BigInteger> result : results) {
+            // Результаты выводятся в порядке занесения на исполнение
+            System.out.println(result.get());
+        }
 
+    }
+
+    static void processAsSoonAsReady(List<Integer> nums)
+            throws InterruptedException, ExecutionException {
+        CompletionService<BigInteger> service = new ExecutorCompletionService<>(
+                Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors()));
+        for (Integer num : nums) {
+            service.submit(() -> Interval.to(num).multiply());
+        }
+        for (Integer ignored : nums) {
+            // Результаты выводятся в порядке завершения
+            System.out.println(service.take().get());
+        }
     }
 
 }
